@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Connect Four Mobile</title>
+  
+  <!-- Favicon Icon for Browser Tab -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230288d1'/><circle cx='35' cy='35' r='20' fill='%23e53935'/><circle cx='65' cy='65' r='20' fill='%23fdd835'/></svg>">
+  
+  <!-- PeerJS (PJS) Library for Online Play -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg-wallpaper, #0f172a);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      transition: background 0.3s ease;
+    }
+
+    /* CSS Custom Variables for Dynamic Player Colors, Wallpaper & Board Slots */
+    :root {
+      --p1-main: #f87171;
+      --p1-dark: #dc2626;
+      --p2-main: #fde047;
+      --p2-dark: #ca8a04;
+      --bg-wallpaper: #0f172a;
+      --slot-bg: #0f172a;
+    }
+
+    /* Screen Management */
+    .screen {
+      display: none;
+      width: 100%;
+      max-width: 480px;
+      height: 100vh;
+      height: 100dvh;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 12px;
+      padding: 16px 16px env(safe-area-inset-bottom, 24px) 16px;
+      overflow-y: auto;
+    }
+    .screen.active {
+      display: flex;
+    }
+
+    /* Splash / Menu Screen */
+    .title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #38bdf8;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      margin-top: 10px;
+      text-align: center;
+    }
+    .card {
+      background: #1e293b;
+      width: 100%;
+      padding: 18px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    /* Visual Mode Cards */
+    .mode-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .mode-card {
+      padding: 12px 14px;
+      border: 2px solid #334155;
+      background: #0f172a;
+      color: #94a3b8;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .mode-card.active {
+      border-color: #38bdf8;
+      background: #1e3a8a;
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+    }
+    .mode-card .badge {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #334155;
+      color: #cbd5e1;
+    }
+    .mode-card.active .badge {
+      background: #0288d1;
+      color: #fff;
+    }
+
+    /* Color Palette Grid */
+    .color-options {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .color-card {
+      padding: 8px 10px;
+      border: 2px solid #334155;
+      background: #0f172a;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .color-card.active {
+      border-color: #38bdf8;
+      background: #1e3a8a;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+    }
+    .color-card span {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .color-swatches {
+      display: flex;
+      gap: 6px;
+    }
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      box-shadow: inset 0 -1px 2px rgba(0,0,0,0.5);
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #fff;
+      background: #2563eb;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    .btn-secondary {
+      background: #059669;
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    /* Online Options Panel */
+    #online-panel {
+      display: none;
+      background: #0f172a;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      margin-top: 8px;
+    }
+
+    /* Game Screen Header */
+    .header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .btn-small {
+      padding: 8px 16px;
+      background: #334155;
+      border: none;
+      color: #fff;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    /* Scoreboard */
+    .scoreboard {
+      display: flex;
+      width: 100%;
+      justify-content: space-around;
+      background: #1e293b;
+      padding: 10px;
+      border-radius: 12px;
+      flex-shrink: 0;
+    }
+    .score-box {
+      text-align: center;
+    }
+    .score-box .name {
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+    .score-box .score {
+      font-size: 1.4rem;
+      font-weight: bold;
+    }
+    .p1-color { color: var(--p1-main); }
+    .p2-color { color: var(--p2-main); }
+
+    /* Turn Indicator */
+    .turn-indicator {
+      font-size: 1.1rem;
+      font-weight: bold;
+      height: 24px;
+      text-align: center;
+      flex-shrink: 0;
+      margin-bottom: 4px;
+    }
+
+    /* Connect Four Blue Frame & Board */
+    .board-container {
+      width: 100%;
+      max-height: 52vh;
+      aspect-ratio: 7 / 6;
+      background: #1d4ed8; /* Blue frame */
+      border-radius: 16px;
+      padding: 8px;
+      box-shadow: inset 0 -6px 0 #1e40af, 0 10px 20px rgba(0,0,0,0.5);
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(6, 1fr);
+      gap: 6px;
+      flex-shrink: 1;
+    }
+    .cell {
+      background: var(--slot-bg, #0f172a); /* Dynamically matches wallpaper */
+      border-radius: 50%;
+      box-shadow: inset 0 3px 6px rgba(0,0,0,0.6);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    .disc {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      transform: translateY(-1000%);
+      transition: transform 0.35s cubic-bezier(0.5, 0, 0.75, 1);
+    }
+    .disc.p1-disc {
+      background: radial-gradient(circle at 30% 30%, var(--p1-main), var(--p1-dark));
+      box-shadow: inset 0 -3px 4px rgba(0,0,0,0.4);
+      transform: translateY(0);
+    }
+    .disc.p2-disc {
+      background: radial-gradient(circle at 30% 30%, var(--p2-main), var(--p2-dark));
+      box-shadow: inset 0 -3px 4px rgba(0,0,0,0.4);
+      transform: translateY(0);
+    }
+
+    /* Winner Glow Animation */
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    .cell.winning .disc {
+      animation: pulse 0.6s infinite alternate;
+    }
+    .status-msg {
+      font-size: 0.85rem;
+      color: #38bdf8;
+      text-align: center;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SPLASH / MAIN MENU SCREEN -->
+  <div id="splash-screen" class="screen active">
+    <div class="title">CONNECT 4</div>
+    <div class="card">
+      
+      <!-- Visually Visible Mode Buttons -->
+      <label>Choose Game Mode</label>
+      <div class="mode-options">
+        <div class="mode-card active" data-mode="1P" onclick="selectMode('1P')">
+          <span>🎮 1 Player</span>
+          <span class="badge">VS Computer</span>
+        </div>
+        <div class="mode-card" data-mode="2P" onclick="selectMode('2P')">
+          <span>👥 2 Players</span>
+          <span class="badge">Pass & Play</span>
+        </div>
+        <div class="mode-card" data-mode="ONLINE" onclick="selectMode('ONLINE')">
+          <span>🌐 Online</span>
+          <span class="badge">PJS Wireless</span>
+        </div>
+      </div>
+
+      <!-- Counter Color Scheme Picker -->
+      <label>Counter Colors</label>
+      <div class="color-options">
+        <div class="color-card active" data-theme="classic" onclick="selectColorTheme('classic')">
+          <span>Classic</span>
+          <div class="color-swatches">
+            <div class="swatch" style="background: #f87171;"></div>
+            <div class="swatch" style="background: #fde047;"></div>
+          </div>
+        </div>
+        <div class="color-card" data-theme="mono" onclick="selectColorTheme('mono')">
+          <span>B & W</span>
+          <div class="color-swatches">
+            <div class="swatch" style="background: #ffffff; border: 1px solid #94a3b8;"></div>
+            <div class="swatch" style="background: #1e293b;"></div>
+          </div>
+        </div>
+        <div class="color-card" data-theme="neon" onclick="selectColorTheme('neon')">
+          <span>Neon</span>
+          <div class="color-swatches">
+            <div class="swatch" style="background: #38bdf8;"></div>
+            <div class="swatch" style="background: #fb923c;"></div>
+          </div>
+        </div>
+        <div class="color-card" data-theme="royal" onclick="selectColorTheme('royal')">
+          <span>Royal</span>
+          <div class="color-swatches">
+            <div class="swatch" style="background: #4ade80;"></div>
+            <div class="swatch" style="background: #c084fc;"></div>
+          </div>
+        </div>
+        <div class="color-card" data-theme="candy" onclick="selectColorTheme('candy')">
+          <span>Candy</span>
+          <div class="color-swatches">
+            <div class="swatch" style="background: #f472b6;"></div>
+            <div class="swatch" style="background: #22d3ee;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="p1-name-input" value="Player 1" maxlength="10">
+      </div>
+
+      <div class="form-group" id="p2-input-group">
+        <label id="p2-label">Opponent Name</label>
+        <input type="text" id="p2-name-input" value="Computer" maxlength="10">
+      </div>
+
+      <!-- Online Sub-Panel -->
+      <div id="online-panel">
+        <div class="form-group">
+          <label>Host or Join Room</label>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" style="margin-top:0" onclick="hostOnlineRoom()">Host Code</button>
+            <button class="btn" style="margin-top:0" onclick="joinOnlineRoom()">Join Code</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Room Code (4 Digits)</label>
+          <input type="number" id="room-code-input" placeholder="e.g. 4321">
+        </div>
+        <div id="online-status" class="status-msg"></div>
+      </div>
+
+      <button id="start-btn" class="btn" onclick="startGame()">START GAME</button>
+    </div>
+    <div style="font-size: 0.8rem; color: #64748b;">Mobile Version by Bazzarn</div>
+  </div>
+
+  <!-- GAMEPLAY SCREEN -->
+  <div id="game-screen" class="screen">
+    <div class="header">
+      <button class="btn-small" onclick="goToMenu()">◄ Main Menu</button>
+      <button class="btn-small" onclick="resetBoard(true)">Reset Board</button>
+    </div>
+
+    <div class="scoreboard">
+      <div class="score-box">
+        <div id="p1-display-name" class="name p1-color">Player 1</div>
+        <div id="p1-score" class="score">0</div>
+      </div>
+      <div class="score-box">
+        <div class="name">Draws</div>
+        <div id="draw-score" class="score">0</div>
+      </div>
+      <div class="score-box">
+        <div id="p2-display-name" class="name p2-color">Player 2</div>
+        <div id="p2-score" class="score">0</div>
+      </div>
+    </div>
+
+    <div id="turn-indicator" class="turn-indicator p1-color">Player 1's Turn</div>
+
+    <!-- 6 Rows x 7 Columns Connect 4 Grid -->
+    <div class="board-container" id="board" onclick="handleBoardClick(event)">
+      <!-- Generated dynamically by JS -->
+    </div>
+  </div>
+
+  <script>
+    const ROWS = 6;
+    const COLS = 7;
+    let board = [];
+    let currentPlayer = 1; // 1 = P1 Counter, 2 = P2 Counter
+    let gameActive = false;
+    let mode = "1P"; // "1P", "2P", or "ONLINE"
+    let p1Name = "Player 1";
+    let p2Name = "Computer";
+
+    let scores = { p1: 0, p2: 0, draws: 0 };
+
+    // --- Color Themes ---
+    const COLOR_THEMES = {
+      classic: { p1Main: '#f87171', p1Dark: '#dc2626', p2Main: '#fde047', p2Dark: '#ca8a04', bg: '#0f172a', slotBg: '#0f172a' },
+      mono:    { p1Main: '#ffffff', p1Dark: '#cbd5e1', p2Main: '#1e293b', p2Dark: '#0f172a', bg: '#eab308', slotBg: '#eab308' },
+      neon:    { p1Main: '#38bdf8', p1Dark: '#0288d1', p2Main: '#fb923c', p2Dark: '#ea580c', bg: '#0f172a', slotBg: '#0f172a' },
+      royal:   { p1Main: '#4ade80', p1Dark: '#16a34a', p2Main: '#c084fc', p2Dark: '#9333ea', bg: '#0f172a', slotBg: '#0f172a' },
+      candy:   { p1Main: '#f472b6', p1Dark: '#db2777', p2Main: '#22d3ee', p2Dark: '#0891b2', bg: '#0f172a', slotBg: '#0f172a' }
+    };
+    let currentTheme = 'classic';
+
+    // --- PeerJS (PJS) Online Variables ---
+    let peer = null;
+    let conn = null;
+    let myOnlineRole = 1; // 1 = Host (P1), 2 = Guest (P2)
+
+    // --- Web Audio Synthesizer (Counter Drop Sound) ---
+    let audioCtx = null;
+    function playDropSound() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.12);
+        
+        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+      } catch (e) {
+        console.log("Audio not supported");
+      }
+    }
+
+    // --- Handle Color Theme Selection ---
+    function selectColorTheme(themeKey) {
+      currentTheme = themeKey;
+      const theme = COLOR_THEMES[themeKey];
+
+      // Update CSS Variables for counters, wallpaper & board hole slots
+      document.documentElement.style.setProperty('--p1-main', theme.p1Main);
+      document.documentElement.style.setProperty('--p1-dark', theme.p1Dark);
+      document.documentElement.style.setProperty('--p2-main', theme.p2Main);
+      document.documentElement.style.setProperty('--p2-dark', theme.p2Dark);
+      document.documentElement.style.setProperty('--bg-wallpaper', theme.bg);
+      document.documentElement.style.setProperty('--slot-bg', theme.slotBg);
+
+      // Highlight active UI card
+      const cards = document.querySelectorAll(".color-card");
+      cards.forEach(card => {
+        if (card.dataset.theme === themeKey) {
+          card.classList.add("active");
+        } else {
+          card.classList.remove("active");
+        }
+      });
+    }
+
+    // --- Handle Visible Card Selection ---
+    function selectMode(selectedMode) {
+      mode = selectedMode;
+
+      // Highlight active mode card visually
+      const cards = document.querySelectorAll(".mode-card");
+      cards.forEach(card => {
+        if (card.dataset.mode === selectedMode) {
+          card.classList.add("active");
+        } else {
+          card.classList.remove("active");
+        }
+      });
+
+      const p2Group = document.getElementById("p2-input-group");
+      const onlinePanel = document.getElementById("online-panel");
+      const startBtn = document.getElementById("start-btn");
+
+      if (mode === "ONLINE") {
+        p2Group.style.display = "none";
+        onlinePanel.style.display = "block";
+        startBtn.style.display = "none";
+      } else {
+        p2Group.style.display = "block";
+        onlinePanel.style.display = "none";
+        startBtn.style.display = "block";
+        document.getElementById("p2-name-input").value = mode === "1P" ? "Computer" : "Player 2";
+      }
+    }
+
+    // --- PeerJS Host Setup ---
+    function hostOnlineRoom() {
+      const status = document.getElementById("online-status");
+      const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+      document.getElementById("room-code-input").value = roomCode;
+      
+      status.innerText = "Creating PJS Room...";
+
+      if (peer) peer.destroy();
+      peer = new Peer("c4-" + roomCode);
+
+      peer.on('open', (id) => {
+        status.innerText = `Room Active! Code: ${roomCode}. Waiting for friend...`;
+        myOnlineRole = 1;
+      });
+
+      peer.on('connection', (c) => {
+        conn = c;
+        setupConnection();
+        status.innerText = "Connected! Starting game...";
+        
+        p1Name = document.getElementById("p1-name-input").value || "Player 1";
+        setTimeout(() => {
+          conn.send({ type: 'init', name: p1Name, theme: currentTheme });
+          startOnlineGame();
+        }, 300);
+      });
+
+      peer.on('error', (err) => {
+        status.innerText = "Error: Code in use, try again.";
+      });
+    }
+
+    // --- PeerJS Join Setup ---
+    function joinOnlineRoom() {
+      const status = document.getElementById("online-status");
+      const roomCode = document.getElementById("room-code-input").value;
+
+      if (!roomCode || roomCode.length < 4) {
+        status.innerText = "Please enter a valid 4-digit Room Code.";
+        return;
+      }
+
+      status.innerText = "Connecting to PJS Room...";
+
+      if (peer) peer.destroy();
+      peer = new Peer();
+
+      peer.on('open', () => {
+        conn = peer.connect("c4-" + roomCode);
+        setupConnection();
+        myOnlineRole = 2;
+      });
+
+      peer.on('error', (err) => {
+        status.innerText = "Failed to connect. Check code.";
+      });
+    }
+
+    function setupConnection() {
+      conn.on('open', () => {
+        p2Name = document.getElementById("p1-name-input").value || "Player 2";
+        conn.send({ type: 'init', name: p2Name, theme: currentTheme });
+      });
+
+      conn.on('data', (data) => {
+        if (data.type === 'init') {
+          if (myOnlineRole === 1) p2Name = data.name;
+          else {
+            p1Name = data.name;
+            if (data.theme) selectColorTheme(data.theme);
+          }
+          startOnlineGame();
+        } else if (data.type === 'move') {
+          makeMove(data.col, true);
+        } else if (data.type === 'reset') {
+          resetBoard(false);
+        }
+      });
+
+      conn.on('close', () => {
+        alert("Opponent disconnected.");
+        goToMenu();
+      });
+    }
+
+    function startOnlineGame() {
+      document.getElementById("p1-display-name").innerText = p1Name;
+      document.getElementById("p2-display-name").innerText = p2Name;
+      document.getElementById("splash-screen").classList.remove("active");
+      document.getElementById("game-screen").classList.add("active");
+      resetBoard(false);
+    }
+
+    function startGame() {
+      p1Name = document.getElementById("p1-name-input").value || "Player 1";
+      p2Name = document.getElementById("p2-name-input").value || "Player 2";
+
+      document.getElementById("p1-display-name").innerText = p1Name;
+      document.getElementById("p2-display-name").innerText = p2Name;
+
+      document.getElementById("splash-screen").classList.remove("active");
+      document.getElementById("game-screen").classList.add("active");
+
+      resetBoard(false);
+    }
+
+    function goToMenu() {
+      if (peer) peer.destroy();
+      document.getElementById("game-screen").classList.remove("active");
+      document.getElementById("splash-screen").classList.add("active");
+    }
+
+    function resetBoard(notifyRemote = true) {
+      board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+      currentPlayer = 1;
+      gameActive = true;
+      renderBoard();
+      updateTurnIndicator();
+
+      if (mode === "ONLINE" && notifyRemote && conn) {
+        conn.send({ type: 'reset' });
+      }
+    }
+
+    function renderBoard() {
+      const boardElem = document.getElementById("board");
+      boardElem.innerHTML = "";
+
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.dataset.col = c;
+          
+          const disc = document.createElement("div");
+          disc.className = "disc";
+          
+          if (board[r][c] === 1) disc.classList.add("p1-disc");
+          if (board[r][c] === 2) disc.classList.add("p2-disc");
+
+          cell.appendChild(disc);
+          boardElem.appendChild(cell);
+        }
+      }
+    }
+
+    function handleBoardClick(e) {
+      if (!gameActive) return;
+      if (mode === "1P" && currentPlayer === 2) return; // Prevent click during AI turn
+      if (mode === "ONLINE" && currentPlayer !== myOnlineRole) return; // Prevent click out of turn
+
+      const targetCell = e.target.closest(".cell");
+      if (!targetCell) return;
+
+      const col = parseInt(targetCell.dataset.col);
+      
+      if (mode === "ONLINE" && conn) {
+        conn.send({ type: 'move', col: col });
+      }
+
+      makeMove(col, false);
+    }
+
+    function makeMove(col, fromRemote = false) {
+      if (!gameActive) return;
+
+      let targetRow = -1;
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (board[r][col] === 0) {
+          targetRow = r;
+          break;
+        }
+      }
+
+      if (targetRow === -1) return; // Column full
+
+      board[targetRow][col] = currentPlayer;
+      playDropSound();
+      renderBoard();
+
+      const winningCells = checkWin(targetRow, col, currentPlayer);
+      if (winningCells) {
+        gameActive = false;
+        highlightWinningCells(winningCells);
+        if (currentPlayer === 1) {
+          scores.p1++;
+          document.getElementById("p1-score").innerText = scores.p1;
+          showStatus(`${p1Name} Wins!`, "p1-color");
+        } else {
+          scores.p2++;
+          document.getElementById("p2-score").innerText = scores.p2;
+          showStatus(`${p2Name} Wins!`, "p2-color");
+        }
+        return;
+      }
+
+      if (board.every(row => row.every(cell => cell !== 0))) {
+        gameActive = false;
+        scores.draws++;
+        document.getElementById("draw-score").innerText = scores.draws;
+        showStatus("Game Draw!", "");
+        return;
+      }
+
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      updateTurnIndicator();
+
+      if (mode === "1P" && currentPlayer === 2 && gameActive) {
+        setTimeout(makeAIMove, 500);
+      }
+    }
+
+    function makeAIMove() {
+      let col = getBestCol(2) ?? getBestCol(1) ?? getRandomCol();
+      if (col !== null) {
+        makeMove(col, false);
+      }
+    }
+
+    function getBestCol(playerToTest) {
+      for (let c = 0; c < COLS; c++) {
+        let r = getLowestRow(c);
+        if (r !== -1) {
+          board[r][c] = playerToTest;
+          let win = checkWin(r, c, playerToTest);
+          board[r][c] = 0;
+          if (win) return c;
+        }
+      }
+      return null;
+    }
+
+    function getRandomCol() {
+      let validCols = [];
+      for (let c = 0; c < COLS; c++) {
+        if (getLowestRow(c) !== -1) validCols.push(c);
+      }
+      return validCols.length > 0 ? validCols[Math.floor(Math.random() * validCols.length)] : null;
+    }
+
+    function getLowestRow(col) {
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (board[r][col] === 0) return r;
+      }
+      return -1;
+    }
+
+    function updateTurnIndicator() {
+      const name = currentPlayer === 1 ? p1Name : p2Name;
+      const colorClass = currentPlayer === 1 ? "p1-color" : "p2-color";
+      showStatus(`${name}'s Turn`, colorClass);
+    }
+
+    function showStatus(text, colorClass) {
+      const indicator = document.getElementById("turn-indicator");
+      indicator.innerText = text;
+      indicator.className = `turn-indicator ${colorClass}`;
+    }
+
+    function checkWin(row, col, player) {
+      const directions = [
+        [[0, 1], [0, -1]],  // Horizontal
+        [[1, 0], [-1, 0]],  // Vertical
+        [[1, 1], [-1, -1]], // Diagonal Down-Right
+        [[1, -1], [-1, 1]]  // Diagonal Down-Left
+      ];
+
+      for (let dir of directions) {
+        let matches = [[row, col]];
+        for (let [dr, dc] of dir) {
+          let r = row + dr;
+          let c = col + dc;
+          while (r >= 0 && r < ROWS && c >= 0 && c < COLS && board[r][c] === player) {
+            matches.push([r, c]);
+            r += dr;
+            c += dc;
+          }
+        }
+        if (matches.length >= 4) return matches;
+      }
+      return null;
+    }
+
+    function highlightWinningCells(cells) {
+      const boardElem = document.getElementById("board");
+      cells.forEach(([r, c]) => {
+        const index = r * COLS + c;
+        boardElem.children[index].classList.add("winning");
+      });
+    }
+  </script>
+</body>
+</html>
